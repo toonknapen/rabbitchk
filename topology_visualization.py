@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from rabbitmq_topology import TopologyGraph
 
@@ -14,14 +14,22 @@ def _dot_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
+def _is_topology_graph(graph: Any) -> bool:
+    return hasattr(graph, "nodes_") and hasattr(graph, "edges_")
+
+
+def _is_rabbit_topology(graph: Any) -> bool:
+    return hasattr(graph, "graph") and hasattr(graph, "exchanges") and hasattr(graph, "queues")
+
+
 def topology_graph_to_dot(
-    graph: TopologyGraph,
+    graph: Any,
     *,
     vhost: Optional[str] = None,
     include_vhost_in_label: bool = False,
     include_routing_keys: bool = True,
 ) -> str:
-    """Convert a TopologyGraph into Graphviz DOT text."""
+    """Convert a TopologyGraph or RabbitTopology into Graphviz DOT text."""
     lines = [
         "digraph RabbitMQTopology {",
         "  rankdir=LR;",
@@ -29,6 +37,17 @@ def topology_graph_to_dot(
         '  node [fontname="Helvetica", style="filled", fillcolor="white"];',
         '  edge [fontname="Helvetica", color="#666666"];',
     ]
+
+    if _is_rabbit_topology(graph):
+        return _rabbit_topology_to_dot(
+            graph,
+            vhost=vhost,
+            include_vhost_in_label=include_vhost_in_label,
+            include_routing_keys=include_routing_keys,
+        )
+
+    if not _is_topology_graph(graph):
+        raise TypeError("graph must be a TopologyGraph or RabbitTopology instance")
 
     visible_nodes = set()
     for node_id in sorted(graph.nodes_):
@@ -69,8 +88,59 @@ def topology_graph_to_dot(
     return "\n".join(lines)
 
 
+def _rabbit_topology_to_dot(
+    graph: Any,
+    *,
+    vhost: Optional[str] = None,
+    include_vhost_in_label: bool = False,
+    include_routing_keys: bool = True,
+) -> str:
+    lines = [
+        "digraph RabbitMQTopology {",
+        "  rankdir=LR;",
+        '  graph [fontname="Helvetica"];',
+        '  node [fontname="Helvetica", style="filled", fillcolor="white"];',
+        '  edge [fontname="Helvetica", color="#666666"];',
+    ]
+
+    for name in sorted(graph.graph.nodes):
+        attrs = graph.graph.nodes[name]
+        node_type = attrs.get("node_type", "queue")
+        shape = "ellipse" if node_type == "exchange" else "box"
+        color = "#CFE8FF" if node_type == "exchange" else "#D7F7D0"
+
+        label = name
+        if include_vhost_in_label:
+            label = f"{label}\\n(/)"
+
+        lines.append(
+            f'  "{_dot_escape(str(name))}" [label="{_dot_escape(str(label))}", '
+            f'shape={shape}, fillcolor="{color}"];'
+        )
+
+    for source, destination, attrs in graph.graph.edges(data=True):
+        if vhost is not None:
+            # RabbitTopology does not track per-node vhost, so only root vhost can be filtered.
+            if vhost != "/":
+                continue
+
+        edge_attrs = []
+        routing_key = attrs.get("routing_key", "")
+        if include_routing_keys and routing_key:
+            edge_attrs.append(f'label="{_dot_escape(str(routing_key))}"')
+
+        attrs_text = f" [{', '.join(edge_attrs)}]" if edge_attrs else ""
+        lines.append(
+            f'  "{_dot_escape(str(source))}" -> '
+            f'"{_dot_escape(str(destination))}"{attrs_text};'
+        )
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
 def visualize_topology_graph(
-    graph: TopologyGraph,
+    graph: Any,
     output_file: str | Path,
     *,
     vhost: Optional[str] = None,
@@ -78,7 +148,7 @@ def visualize_topology_graph(
     include_routing_keys: bool = True,
     graphviz_command: str = "dot",
 ) -> Path:
-    """Write a visual representation of TopologyGraph to disk.
+    """Write a visual representation of a topology graph to disk.
 
     If output_file ends with .dot, the DOT source is written directly.
     For other extensions (.png, .svg, .pdf, ...), this function invokes Graphviz.

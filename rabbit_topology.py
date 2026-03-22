@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional, Set, Tuple
 import networkx as nx
 
 
-class RabbitMQTopologyGraph:
+class RabbitTopology:
     """
     Represents a RabbitMQ topology as a directed graph.
     
@@ -219,7 +219,7 @@ class RabbitMQTopologyGraph:
 def main():
     """Example usage of the RabbitMQTopologyGraph."""
     # Example: Load from a JSON file
-    topology = RabbitMQTopologyGraph()
+    topology = RabbitTopology()
     topology.load_from_json_file('data/mine.json')
     
     print(topology.summary())

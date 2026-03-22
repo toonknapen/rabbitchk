@@ -1,7 +1,6 @@
 
 import argparse
-import json
-import rabbitmq_topology
+import rabbit_topology
 import topology_visualization
 
 if __name__ == "__main__":
@@ -10,9 +9,10 @@ if __name__ == "__main__":
     parser.add_argument("--output-file", type=str, help="Path a graphic file to write the topology visualization to (e.g. .png, .pdf).")
     args = parser.parse_args()
 
-    graph = rabbitmq_topology.TopologyGraph.from_file(args.definitions_file)
-    print(json.dumps(graph.summary(), indent=2, sort_keys=True))
+    topology = rabbit_topology.RabbitTopology()
+    topology.load_from_json_file(args.definitions_file)
+    print(topology.summary())
 
     if args.output_file:
-        topology_visualization.visualize_topology_graph(graph, args.output_file)
+        topology_visualization.visualize_topology_graph(topology, args.output_file)
         print("Topology visualization written to:", args.output_file)
