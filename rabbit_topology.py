@@ -23,7 +23,7 @@ class RabbitTopology:
         self.graph_: nx.DiGraph = nx.DiGraph()
         self.exchanges_: Dict[str, Dict[str, Any]] = {}  # original exchange definitions
         self.queues_: Dict[str, Dict[str, Any]] = {}     # original queue definitions
-        self.bindings_: List[Dict[str, Any]] = []        # original binding definitions
+        self.bindings_: Dict[Tuple[str, str], Dict[str, Any]] = {}  # keyed by (source, destination)
         self.shovels_: Dict[str, Dict[str, Any]] = {}    # original shovel definitions
     
     def load_from_json_file(self, filepath: str) -> None:
@@ -103,7 +103,7 @@ class RabbitTopology:
         destination = binding['destination']
         routing_key = binding.get('routing_key', '')
         
-        self.bindings_.append(binding)
+        self.bindings_[(source, destination)] = dict(binding)
         
         # Create edge from exchange to queue
         self.graph_.add_edge(
@@ -145,21 +145,23 @@ class RabbitTopology:
                 binding_type='shovel'
             )
     
-    def has_exchanges(self, exchange: Dict[str,Any]) -> bool: 
+    def has_exchange(self, exchange: Dict[str,Any]) -> bool: 
         name = exchange['name']
         return exchange == self.exchanges_.get(name)
     
-    def has_queues(self, queue: Dict[str,Any]) -> bool:
+    def has_queue(self, queue: Dict[str,Any]) -> bool:
         name = queue['name']
         return queue == self.queues_.get(name)
     
-    def get_bindings(self) -> List[Dict[str, Any]]:
-        """Get all bindings."""
-        return self.bindings_.copy()
+    def has_binding(self, binding: Dict[str, Any]) -> bool:
+        """Check if a specific binding exists."""
+        key = (binding['source'], binding['destination'])
+        return binding == self.bindings_.get(key)
     
-    def get_shovels(self) -> Dict[str, Dict[str, Any]]:
-        """Get all shovels."""
-        return self.shovels_.copy()
+    def has_shovel(self, shovel: Dict[str, Any]) -> bool:
+        """Check if a specific shovel exists."""
+        name = shovel['name']
+        return shovel == self.shovels_.get(name)
     
     def get_graph(self) -> nx.DiGraph:
         """Get the underlying NetworkX directed graph."""
@@ -251,7 +253,7 @@ class RabbitTopology:
         if self.bindings_:
             lines.append("")
             lines.append("Bindings:")
-            for binding in self.bindings_:
+            for binding in self.bindings_.values():
                 source = binding['source']
                 dest = binding['destination']
                 routing_key = binding.get('routing_key', '')
