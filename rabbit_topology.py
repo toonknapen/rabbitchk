@@ -20,10 +20,10 @@ class RabbitTopology:
     
     def __init__(self):
         """Initialize an empty topology graph."""
-        self.graph = nx.DiGraph()
-        self.exchanges: Dict[str, Dict[str, Any]] = {}
-        self.queues: Dict[str, Dict[str, Any]] = {}
-        self.bindings: List[Dict[str, Any]] = []
+        self.graph_: nx.DiGraph = nx.DiGraph()
+        self.exchanges_: Dict[str, Dict[str, Any]] = {}
+        self.queues_: Dict[str, Dict[str, Any]] = {}
+        self.bindings_: List[Dict[str, Any]] = []
     
     def load_from_json_file(self, filepath: str) -> None:
         """
@@ -45,10 +45,10 @@ class RabbitTopology:
             data: Dictionary containing 'exchanges', 'queues', and 'bindings'
         """
         # Clear existing data
-        self.graph.clear()
-        self.exchanges.clear()
-        self.queues.clear()
-        self.bindings.clear()
+        self.graph_.clear()
+        self.exchanges_.clear()
+        self.queues_.clear()
+        self.bindings_.clear()
         
         # Add exchanges
         if 'exchanges' in data:
@@ -68,8 +68,8 @@ class RabbitTopology:
     def _add_exchange(self, exchange: Dict[str, Any]) -> None:
         """Add an exchange node to the graph."""
         name = exchange['name']
-        self.exchanges[name] = exchange
-        self.graph.add_node(
+        self.exchanges_[name] = exchange
+        self.graph_.add_node(
             name,
             node_type='exchange',
             exchange_type=exchange.get('type', 'unknown'),
@@ -81,8 +81,8 @@ class RabbitTopology:
     def _add_queue(self, queue: Dict[str, Any]) -> None:
         """Add a queue node to the graph."""
         name = queue['name']
-        self.queues[name] = queue
-        self.graph.add_node(
+        self.queues_[name] = queue
+        self.graph_.add_node(
             name,
             node_type='queue',
             durable=queue.get('durable', False),
@@ -95,10 +95,10 @@ class RabbitTopology:
         destination = binding['destination']
         routing_key = binding.get('routing_key', '')
         
-        self.bindings.append(binding)
+        self.bindings_.append(binding)
         
         # Create edge from exchange to queue
-        self.graph.add_edge(
+        self.graph_.add_edge(
             source,
             destination,
             routing_key=routing_key,
@@ -107,19 +107,19 @@ class RabbitTopology:
     
     def get_exchanges(self) -> Dict[str, Dict[str, Any]]:
         """Get all exchanges."""
-        return self.exchanges.copy()
+        return self.exchanges_.copy()
     
     def get_queues(self) -> Dict[str, Dict[str, Any]]:
         """Get all queues."""
-        return self.queues.copy()
+        return self.queues_.copy()
     
     def get_bindings(self) -> List[Dict[str, Any]]:
         """Get all bindings."""
-        return self.bindings.copy()
+        return self.bindings_.copy()
     
     def get_graph(self) -> nx.DiGraph:
         """Get the underlying NetworkX directed graph."""
-        return self.graph
+        return self.graph_
     
     def get_exchange_bindings(self, exchange_name: str) -> List[str]:
         """
@@ -131,10 +131,10 @@ class RabbitTopology:
         Returns:
             List of queue names bound to the exchange
         """
-        if exchange_name not in self.graph:
+        if exchange_name not in self.graph_:
             return []
         
-        return list(self.graph.successors(exchange_name))
+        return list(self.graph_.successors(exchange_name))
     
     def get_queue_sources(self, queue_name: str) -> List[str]:
         """
@@ -146,10 +146,10 @@ class RabbitTopology:
         Returns:
             List of exchange names that bind to the queue
         """
-        if queue_name not in self.graph:
+        if queue_name not in self.graph_:
             return []
         
-        return list(self.graph.predecessors(queue_name))
+        return list(self.graph_.predecessors(queue_name))
     
     def get_routing_key(self, exchange_name: str, queue_name: str) -> Optional[str]:
         """
@@ -162,8 +162,8 @@ class RabbitTopology:
         Returns:
             Routing key if binding exists, None otherwise
         """
-        if self.graph.has_edge(exchange_name, queue_name):
-            return self.graph[exchange_name][queue_name].get('routing_key')
+        if self.graph_.has_edge(exchange_name, queue_name):
+            return self.graph_[exchange_name][queue_name].get('routing_key')
         return None
     
     def get_connected_components(self) -> List[Set[str]]:
@@ -173,7 +173,7 @@ class RabbitTopology:
         Returns:
             List of sets, each containing nodes in a connected component
         """
-        undirected = self.graph.to_undirected()
+        undirected = self.graph_.to_undirected()
         components = list(nx.connected_components(undirected))
         return components
     
@@ -187,26 +187,26 @@ class RabbitTopology:
         lines = []
         lines.append(f"RabbitMQ Topology Summary")
         lines.append(f"{'=' * 50}")
-        lines.append(f"Exchanges: {len(self.exchanges)}")
-        lines.append(f"Queues: {len(self.queues)}")
-        lines.append(f"Bindings: {len(self.bindings)}")
+        lines.append(f"Exchanges: {len(self.exchanges_)}")
+        lines.append(f"Queues: {len(self.queues_)}")
+        lines.append(f"Bindings: {len(self.bindings_)}")
         lines.append(f"")
         
-        if self.exchanges:
+        if self.exchanges_:
             lines.append("Exchanges:")
-            for name, props in self.exchanges.items():
+            for name, props in self.exchanges_.items():
                 lines.append(f"  - {name} ({props.get('type', 'unknown')})")
         
-        if self.queues:
+        if self.queues_:
             lines.append("")
             lines.append("Queues:")
-            for name in sorted(self.queues.keys()):
+            for name in sorted(self.queues_.keys()):
                 lines.append(f"  - {name}")
         
-        if self.bindings:
+        if self.bindings_:
             lines.append("")
             lines.append("Bindings:")
-            for binding in self.bindings:
+            for binding in self.bindings_:
                 source = binding['source']
                 dest = binding['destination']
                 routing_key = binding.get('routing_key', '')
@@ -224,8 +224,8 @@ def main():
     
     print(topology.summary())
     print("\nGraph Stats:")
-    print(f"Nodes: {topology.graph.number_of_nodes()}")
-    print(f"Edges: {topology.graph.number_of_edges()}")
+    print(f"Nodes: {topology.graph_.number_of_nodes()}")
+    print(f"Edges: {topology.graph_.number_of_edges()}")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ def _is_topology_graph(graph: Any) -> bool:
 
 
 def _is_rabbit_topology(graph: Any) -> bool:
-    return hasattr(graph, "graph") and hasattr(graph, "exchanges") and hasattr(graph, "queues")
+    return hasattr(graph, "graph_") and hasattr(graph, "exchanges_") and hasattr(graph, "queues_")
 
 
 def topology_graph_to_dot(
@@ -100,8 +100,8 @@ def _rabbit_topology_to_dot(
         '  edge [fontname="Helvetica", color="#666666"];',
     ]
 
-    for name in sorted(graph.graph.nodes):
-        attrs = graph.graph.nodes[name]
+    for name in sorted(graph.graph_.nodes):
+        attrs = graph.graph_.nodes[name]
         node_type = attrs.get("node_type", "queue")
         shape = "ellipse" if node_type == "exchange" else "box"
         color = "#CFE8FF" if node_type == "exchange" else "#D7F7D0"
@@ -115,7 +115,7 @@ def _rabbit_topology_to_dot(
             f'shape={shape}, fillcolor="{color}"];'
         )
 
-    for source, destination, attrs in graph.graph.edges(data=True):
+    for source, destination, attrs in graph.graph_.edges(data=True):
         if vhost is not None:
             # RabbitTopology does not track per-node vhost, so only root vhost can be filtered.
             if vhost != "/":
