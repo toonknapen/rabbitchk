@@ -144,6 +144,9 @@ class RabbitTopology:
                 dest_address,
                 binding_type='shovel'
             )
+    def is_empty(self) -> bool:
+        """Check if the topology graph is empty."""
+        return self.graph_.number_of_nodes() == 0 and self.graph_.number_of_edges() == 0
     
     def has_exchange(self, exchange: Dict[str,Any]) -> bool: 
         name = exchange['name']
@@ -162,6 +165,29 @@ class RabbitTopology:
         """Check if a specific shovel exists."""
         name = shovel['name']
         return shovel == self.shovels_.get(name)
+
+    def substract(self, other: 'RabbitTopology') -> RabbitTopology:
+        """Check if this topology is a subgraph of another topology."""
+        diff = RabbitTopology()
+
+        # Check if all exchanges, queues, bindings, and shovels in this graph are present in the other graph
+        for exchange in self.exchanges_.values():
+            if not other.has_exchange(exchange):
+                diff._add_exchange(exchange)
+        
+        for queue in self.queues_.values():
+            if not other.has_queue(queue):
+                diff._add_queue(queue)
+        
+        for binding in self.bindings_.values():
+            if not other.has_binding(binding):
+                diff._add_binding(binding)
+        
+        for shovel in self.shovels_.values():
+            if not other.has_shovel(shovel):
+                diff._add_shovel(shovel)
+        
+        return diff
     
     def get_graph(self) -> nx.DiGraph:
         """Get the underlying NetworkX directed graph."""

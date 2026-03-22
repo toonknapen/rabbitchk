@@ -9,7 +9,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["--definitions-file","${workspaceFolder}/data/RabbitTest3_sbirmqs3003_2026-3-14.json", "--output-file","${workspaceFolder}/data/topology.png"],
+            "args": ["--definitions-file","${workspaceFolder}/data/full.json", "--output-file","${workspaceFolder}/data/topology.png"],
             "console": "integratedTerminal"
         },
         {
@@ -18,6 +18,17 @@
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "args": ["--definitions-file","${workspaceFolder}/data/mine.json", "--output-file","${workspaceFolder}/data/topology.png"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "main sub",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["--definitions-file","${workspaceFolder}/data/mine.json", 
+                "--substract","${workspaceFolder}/data/full.json",
+                "--output-file","${workspaceFolder}/data/topology.png"
+                ],
             "console": "integratedTerminal"
         }
     ]
