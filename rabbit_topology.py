@@ -14,16 +14,17 @@ class RabbitTopology:
     """
     Represents a RabbitMQ topology as a directed graph.
     
-    Nodes are either exchanges or queues.
-    Edges represent bindings between exchanges and queues.
+    Nodes are exchanges, queues, or shovels.
+    Edges represent bindings between exchanges and queues, or shovels connecting queues.
     """
     
     def __init__(self):
         """Initialize an empty topology graph."""
         self.graph_: nx.DiGraph = nx.DiGraph()
-        self.exchanges_: Dict[str, Dict[str, Any]] = {}
-        self.queues_: Dict[str, Dict[str, Any]] = {}
-        self.bindings_: List[Dict[str, Any]] = []
+        self.exchanges_: Dict[str, Dict[str, Any]] = {}  # original exchange definitions
+        self.queues_: Dict[str, Dict[str, Any]] = {}     # original queue definitions
+        self.bindings_: List[Dict[str, Any]] = []        # original binding definitions
+        self.shovels_: Dict[str, Dict[str, Any]] = {}    # original shovel definitions
     
     def load_from_json_file(self, filepath: str) -> None:
         """
@@ -42,13 +43,14 @@ class RabbitTopology:
         Load RabbitMQ topology from a dictionary.
         
         Args:
-            data: Dictionary containing 'exchanges', 'queues', and 'bindings'
+            data: Dictionary containing 'exchanges', 'queues', 'bindings', and optionally 'parameters'
         """
         # Clear existing data
         self.graph_.clear()
         self.exchanges_.clear()
         self.queues_.clear()
         self.bindings_.clear()
+        self.shovels_.clear()
         
         # Add exchanges
         if 'exchanges' in data:
@@ -64,6 +66,12 @@ class RabbitTopology:
         if 'bindings' in data:
             for binding in data['bindings']:
                 self._add_binding(binding)
+        
+        # Add shovels (from parameters with component type 'shovel')
+        if 'parameters' in data:
+            for param in data['parameters']:
+                if param.get('component') == 'shovel':
+                    self._add_shovel(param)
     
     def _add_exchange(self, exchange: Dict[str, Any]) -> None:
         """Add an exchange node to the graph."""
@@ -105,6 +113,38 @@ class RabbitTopology:
             binding_type=binding.get('destination_type', 'queue')
         )
     
+    def _add_shovel(self, shovel: Dict[str, Any]) -> None:
+        """Add a shovel node and edges to the graph."""
+        name = shovel['name']
+        self.shovels_[name] = shovel
+        
+        # Add shovel as a node
+        self.graph_.add_node(
+            name,
+            node_type='shovel'
+        )
+        
+        # Extract source and destination info from shovel value
+        value = shovel.get('value', {})
+        src_queue = value.get('src-queue')
+        dest_address = value.get('dest-address')
+        
+        # Add edge from source queue to shovel
+        if src_queue:
+            self.graph_.add_edge(
+                src_queue,
+                name,
+                binding_type='shovel'
+            )
+        
+        # Add edge from shovel to destination address
+        if dest_address:
+            self.graph_.add_edge(
+                name,
+                dest_address,
+                binding_type='shovel'
+            )
+    
     def get_exchanges(self) -> Dict[str, Dict[str, Any]]:
         """Get all exchanges."""
         return self.exchanges_.copy()
@@ -116,6 +156,10 @@ class RabbitTopology:
     def get_bindings(self) -> List[Dict[str, Any]]:
         """Get all bindings."""
         return self.bindings_.copy()
+    
+    def get_shovels(self) -> Dict[str, Dict[str, Any]]:
+        """Get all shovels."""
+        return self.shovels_.copy()
     
     def get_graph(self) -> nx.DiGraph:
         """Get the underlying NetworkX directed graph."""
@@ -190,6 +234,7 @@ class RabbitTopology:
         lines.append(f"Exchanges: {len(self.exchanges_)}")
         lines.append(f"Queues: {len(self.queues_)}")
         lines.append(f"Bindings: {len(self.bindings_)}")
+        lines.append(f"Shovels: {len(self.shovels_)}")
         lines.append(f"")
         
         if self.exchanges_:
@@ -212,6 +257,15 @@ class RabbitTopology:
                 routing_key = binding.get('routing_key', '')
                 key_str = f" (key: '{routing_key}')" if routing_key else ""
                 lines.append(f"  - {source} -> {dest}{key_str}")
+        
+        if self.shovels_:
+            lines.append("")
+            lines.append("Shovels:")
+            for name, shovel in self.shovels_.items():
+                value = shovel.get('value', {})
+                src_queue = value.get('src-queue', 'unknown')
+                dest_address = value.get('dest-address', 'unknown')
+                lines.append(f"  - {name}: {src_queue} => {dest_address}")
         
         return "\n".join(lines)
 

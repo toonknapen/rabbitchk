@@ -103,8 +103,15 @@ def _rabbit_topology_to_dot(
     for name in sorted(graph.graph_.nodes):
         attrs = graph.graph_.nodes[name]
         node_type = attrs.get("node_type", "queue")
-        shape = "ellipse" if node_type == "exchange" else "box"
-        color = "#CFE8FF" if node_type == "exchange" else "#D7F7D0"
+        if node_type == "exchange":
+            shape = "ellipse"
+            color = "#CFE8FF"
+        elif node_type == "shovel":
+            shape = "diamond"
+            color = "#FFE8CF"
+        else:
+            shape = "box"
+            color = "#D7F7D0"
 
         label = name
         if include_vhost_in_label:
