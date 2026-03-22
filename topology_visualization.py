@@ -7,9 +7,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
-from rabbitmq_topology import TopologyGraph
-
-
 def _dot_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
