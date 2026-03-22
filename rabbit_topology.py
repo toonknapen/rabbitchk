@@ -145,13 +145,13 @@ class RabbitTopology:
                 binding_type='shovel'
             )
     
-    def get_exchanges(self) -> Dict[str, Dict[str, Any]]:
-        """Get all exchanges."""
-        return self.exchanges_.copy()
+    def has_exchanges(self, exchange: Dict[str,Any]) -> bool: 
+        name = exchange['name']
+        return exchange == self.exchanges_.get(name)
     
-    def get_queues(self) -> Dict[str, Dict[str, Any]]:
-        """Get all queues."""
-        return self.queues_.copy()
+    def has_queues(self, queue: Dict[str,Any]) -> bool:
+        name = queue['name']
+        return queue == self.queues_.get(name)
     
     def get_bindings(self) -> List[Dict[str, Any]]:
         """Get all bindings."""
