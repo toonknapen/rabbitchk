@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from xml.etree import ElementTree as ET
 
 def _dot_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
@@ -143,6 +145,158 @@ def _rabbit_topology_to_dot(
     return "\n".join(lines)
 
 
+def _drawio_style_for_node_type(node_type: str) -> str:
+    if node_type == "exchange":
+        return "rounded=1;whiteSpace=wrap;html=1;fillColor=#CFE8FF;strokeColor=#5B8DB8;"
+    if node_type == "shovel":
+        return "rhombus;whiteSpace=wrap;html=1;fillColor=#FFE8CF;strokeColor=#B88646;"
+    return "rounded=0;whiteSpace=wrap;html=1;fillColor=#D7F7D0;strokeColor=#5E9C55;"
+
+
+def topology_graph_to_drawio(
+    graph: Any,
+    *,
+    include_vhost_in_label: bool = False,
+    include_routing_keys: bool = True,
+    diagram_name: str = "RabbitMQ Topology",
+) -> str:
+    """Convert a TopologyGraph or RabbitTopology into draw.io XML text."""
+    node_rows: list[tuple[str, str, str]] = []
+    edge_rows: list[tuple[str, str, str]] = []
+
+    if _is_rabbit_topology(graph):
+        for name in sorted(graph.graph_.nodes):
+            attrs = graph.graph_.nodes[name]
+            node_type = attrs.get("node_type", "queue")
+            label = str(name)
+            if include_vhost_in_label:
+                label = f"{label}\\n(/)"
+            node_rows.append((str(name), str(node_type), label))
+
+        for source, destination, attrs in graph.graph_.edges(data=True):
+            routing_key = str(attrs.get("routing_key", ""))
+            edge_rows.append((str(source), str(destination), routing_key))
+    elif _is_topology_graph(graph):
+        for node_id in sorted(graph.nodes_):
+            node = graph.nodes_[node_id]
+            label = node.name_
+            if include_vhost_in_label:
+                label = f"{label}\\n({node.vhost_})"
+            node_rows.append((node_id, node.kind_, label))
+
+        for edge in graph.edges_:
+            edge_rows.append((edge.source_id_, edge.destination_id_, edge.routing_key_))
+    else:
+        raise TypeError("graph must be a TopologyGraph or RabbitTopology instance")
+
+    mxfile = ET.Element(
+        "mxfile",
+        {
+            "host": "app.diagrams.net",
+            "modified": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            "agent": "rabbitchk",
+            "version": "24.7.17",
+        },
+    )
+    diagram = ET.SubElement(mxfile, "diagram", {"id": "rabbit-topology", "name": diagram_name})
+    model = ET.SubElement(
+        diagram,
+        "mxGraphModel",
+        {
+            "dx": "1200",
+            "dy": "900",
+            "grid": "1",
+            "gridSize": "10",
+            "guides": "1",
+            "tooltips": "1",
+            "connect": "1",
+            "arrows": "1",
+            "fold": "1",
+            "page": "1",
+            "pageScale": "1",
+            "pageWidth": "1700",
+            "pageHeight": "1100",
+            "math": "0",
+            "shadow": "0",
+        },
+    )
+    root = ET.SubElement(model, "root")
+    ET.SubElement(root, "mxCell", {"id": "0"})
+    ET.SubElement(root, "mxCell", {"id": "1", "parent": "0"})
+
+    x_by_type = {
+        "exchange": 40,
+        "queue": 360,
+        "shovel": 680,
+        "other": 1000,
+    }
+    y_index_by_type: dict[str, int] = {"exchange": 0, "queue": 0, "shovel": 0, "other": 0}
+    node_id_map: dict[str, str] = {}
+
+    next_id = 2
+    for node_name, node_type, label in node_rows:
+        drawio_node_type = node_type if node_type in x_by_type else "other"
+        x = x_by_type[drawio_node_type]
+        y = 40 + y_index_by_type[drawio_node_type] * 90
+        y_index_by_type[drawio_node_type] += 1
+
+        cell_id = str(next_id)
+        next_id += 1
+        node_id_map[node_name] = cell_id
+
+        cell = ET.SubElement(
+            root,
+            "mxCell",
+            {
+                "id": cell_id,
+                "value": label,
+                "style": _drawio_style_for_node_type(drawio_node_type),
+                "vertex": "1",
+                "parent": "1",
+            },
+        )
+        ET.SubElement(
+            cell,
+            "mxGeometry",
+            {
+                "x": str(x),
+                "y": str(y),
+                "width": "220",
+                "height": "60",
+                "as": "geometry",
+            },
+        )
+
+    for source, destination, routing_key in edge_rows:
+        source_id = node_id_map.get(source)
+        destination_id = node_id_map.get(destination)
+        if not source_id or not destination_id:
+            continue
+
+        label = routing_key if include_routing_keys else ""
+        if include_routing_keys and not routing_key:
+            label = ""
+
+        edge_cell = ET.SubElement(
+            root,
+            "mxCell",
+            {
+                "id": str(next_id),
+                "value": label,
+                "style": "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;",
+                "edge": "1",
+                "parent": "1",
+                "source": source_id,
+                "target": destination_id,
+            },
+        )
+        next_id += 1
+        ET.SubElement(edge_cell, "mxGeometry", {"relative": "1", "as": "geometry"})
+
+    xml_text = ET.tostring(mxfile, encoding="unicode")
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_text}'
+
+
 def visualize_topology_graph(
     graph: Any,
     output_file: str | Path,
@@ -169,6 +323,15 @@ def visualize_topology_graph(
 
     if output_path.suffix.lower() == ".dot":
         output_path.write_text(dot_text, encoding="utf-8")
+        return output_path
+
+    if output_path.suffix.lower() == ".drawio":
+        drawio_text = topology_graph_to_drawio(
+            graph,
+            include_vhost_in_label=include_vhost_in_label,
+            include_routing_keys=include_routing_keys,
+        )
+        output_path.write_text(drawio_text, encoding="utf-8")
         return output_path
 
     if not output_path.suffix:
